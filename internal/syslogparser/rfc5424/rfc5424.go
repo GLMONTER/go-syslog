@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"gopkg.in/mcuadros/go-syslog.v2/internal/syslogparser"
+	"github.com/GLMONTER/go-syslog/internal/syslogparser"
 )
 
 const (
@@ -189,6 +189,72 @@ func (p *Parser) parseVersion() (int, error) {
 	return syslogparser.ParseVersion(p.buff, &p.cursor, p.l)
 }
 
+// isUnixTimestamp checks if the buffer at the current cursor position is a Unix timestamp.
+func isUnixTimestamp(buff []byte, cursor *int, l int) bool {
+	//example of what we are looking for : 1701233380.285170542
+	startPos := *cursor
+	dotEncountered := false
+
+	for i := startPos; i < l; i++ {
+		if buff[i] == '.' {
+			dotEncountered = true
+			continue
+		}
+
+		if !dotEncountered && i-startPos >= 10 {
+			return true
+		}
+
+		if !syslogparser.IsDigit(buff[i]) {
+			break
+		}
+	}
+
+	return false
+}
+
+// parseUnixTimestamp parses a Unix timestamp from the buffer
+// and converts it to a time.Time object.
+func parseUnixTimestamp(buff []byte, cursor *int, l int) (time.Time, error) {
+	startPos := *cursor
+	dotPos := -1 // Position of the dot in the timestamp
+	fracPartStr := ""
+
+	// Find the position of the dot (if any)
+	for i := startPos; i < l && (dotPos == -1); i++ {
+		if buff[i] == '.' {
+			dotPos = i
+		} else if !syslogparser.IsDigit(buff[i]) {
+			break
+		}
+	}
+
+	// Extract the integer part of the timestamp
+	intPartStr := string(buff[startPos:dotPos])
+	intPart, err := strconv.ParseInt(intPartStr, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	var fracPart int64 = 0
+	if dotPos != -1 {
+		// Extract the fractional part of the timestamp
+		fracPartStr = string(buff[dotPos+1 : *cursor])
+		fracPart, err = strconv.ParseInt(fracPartStr, 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		// Adjust the cursor position after the fractional part
+		*cursor += len(fracPartStr)
+	}
+
+	// Construct the time.Time object
+	sec := intPart
+	nsec := fracPart * int64(math.Pow10(9-len(fracPartStr)))
+	ts := time.Unix(sec, nsec)
+	return ts, nil
+}
+
 // https://tools.ietf.org/html/rfc5424#section-6.2.3
 func (p *Parser) parseTimestamp() (time.Time, error) {
 	var ts time.Time
@@ -200,6 +266,15 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 	if p.buff[p.cursor] == NILVALUE {
 		p.cursor++
 		return ts, nil
+	}
+
+	// Check if the timestamp is in Unix format (e.g., 1701233380.285170542)
+	if isUnixTimestamp(p.buff, &p.cursor, p.l) {
+		unixTs, err := parseUnixTimestamp(p.buff, &p.cursor, p.l)
+		if err != nil {
+			return ts, err
+		}
+		return unixTs, nil
 	}
 
 	fd, err := parseFullDate(p.buff, &p.cursor, p.l)
