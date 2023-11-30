@@ -5,7 +5,6 @@ package rfc5424
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"strconv"
 	"time"
@@ -193,17 +192,11 @@ func (p *Parser) parseVersion() (int, error) {
 // isUnixTimestamp checks if the buffer at the current cursor position starts with a Unix timestamp.
 func isUnixTimestamp(buff []byte, cursor *int, l int) bool {
 	startPos := *cursor
-	dotEncountered := false
 	digitCount := 0
 
 	for i := startPos; i < l; i++ {
 		if buff[i] == '.' {
-			if digitCount >= 10 { // Ensure at least 10 digits before the dot
-				dotEncountered = true
-				continue
-			} else {
-				return false // Not enough digits before the dot
-			}
+			return digitCount >= 10 // Return true if at least 10 digits before the dot
 		}
 
 		if syslogparser.IsDigit(buff[i]) {
@@ -211,64 +204,55 @@ func isUnixTimestamp(buff []byte, cursor *int, l int) bool {
 			continue
 		}
 
-		// If we have encountered a dot and have sufficient digits, it's a Unix timestamp
-		if dotEncountered && digitCount >= 10 {
-			return true
-		}
-
-		// If we have sufficient digits but no dot, still consider it a Unix timestamp
-		if digitCount >= 10 {
-			return true
-		}
-
-		// If we encounter a non-digit, non-dot character, break the loop
-		break
+		break // Break on encountering a non-digit character
 	}
 
-	return false
+	return digitCount >= 10 // Return true if at least 10 digits without a dot
 }
 
 // parseUnixTimestamp parses a Unix timestamp from the buffer
 // and converts it to a time.Time object.
 func parseUnixTimestamp(buff []byte, cursor *int, l int) (time.Time, error) {
 	startPos := *cursor
-	dotPos := -1 // Position of the dot in the timestamp
-	fracPartStr := ""
-
-	// Find the position of the dot (if any)
-	for i := startPos; i < l && (dotPos == -1); i++ {
+	dotPos := -1
+	for i := startPos; i < l; i++ {
 		if buff[i] == '.' {
 			dotPos = i
-		} else if !syslogparser.IsDigit(buff[i]) {
 			break
 		}
 	}
 
-	// Extract the integer part of the timestamp
-	intPartStr := string(buff[startPos:dotPos])
-	intPart, err := strconv.ParseInt(intPartStr, 10, 64)
+	var intPartStr, fracPartStr string
+	if dotPos == -1 {
+		intPartStr = string(buff[startPos:])
+		*cursor = l
+	} else {
+		intPartStr = string(buff[startPos:dotPos])
+		// Find where the fractional part ends
+		fracEnd := dotPos + 1
+		for fracEnd < l && syslogparser.IsDigit(buff[fracEnd]) {
+			fracEnd++
+		}
+		fracPartStr = string(buff[dotPos+1 : fracEnd])
+		*cursor = fracEnd
+	}
+
+	sec, err := strconv.ParseInt(intPartStr, 10, 64)
 	if err != nil {
 		return time.Time{}, err
 	}
 
-	var fracPart int64 = 0
-	if dotPos != -1 {
-		// Extract the fractional part of the timestamp
-		fracPartStr = string(buff[dotPos+1 : *cursor])
-		fracPart, err = strconv.ParseInt(fracPartStr, 10, 64)
+	var nsec int64 = 0
+	if fracPartStr != "" {
+		// Convert fractional part to a float then to nanoseconds
+		fracSec, err := strconv.ParseFloat("0."+fracPartStr, 64)
 		if err != nil {
 			return time.Time{}, err
 		}
-		// Adjust the cursor position after the fractional part
-		*cursor += len(fracPartStr)
+		nsec = int64(fracSec * 1e9)
 	}
 
-	// Construct the time.Time object
-	sec := intPart
-	nsec := fracPart * int64(math.Pow10(9-len(fracPartStr)))
-	ts := time.Unix(sec, nsec)
-	log.Printf("ret : %v", ts)
-	return ts, nil
+	return time.Unix(sec, nsec), nil
 }
 
 // https://tools.ietf.org/html/rfc5424#section-6.2.3
@@ -286,14 +270,11 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 
 	// Check if the timestamp is in Unix format (e.g., 1701233380.285170542)
 	if isUnixTimestamp(p.buff, &p.cursor, p.l) {
-		log.Println("timestamp is unix")
 		unixTs, err := parseUnixTimestamp(p.buff, &p.cursor, p.l)
 		if err != nil {
 			return ts, err
 		}
 		return unixTs, nil
-	} else {
-		log.Println("timestamp is not unix")
 	}
 
 	fd, err := parseFullDate(p.buff, &p.cursor, p.l)

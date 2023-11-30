@@ -294,6 +294,25 @@ func (s *Rfc5424TestSuite) TestParseTimestamp_NanoSeconds(c *C) {
 	s.assertTimestamp(c, *ts, buff, 26, syslogparser.ErrTimestampUnknownFormat)
 }
 
+func (s *Rfc5424TestSuite) TestParseTimestamp_UnixTimestamp(c *C) {
+	// Example Unix timestamp with fractional seconds
+	unixTimestamp := "1701233380.285170542"
+	buff := []byte("<34>1 " + unixTimestamp + " mymachine.example.com su - ID47 - 'su root' failed for lonvick on /dev/pts/8")
+
+	// Expected time.Time value for the Unix timestamp
+	expectedTs := time.Unix(1701233380, 285170542)
+
+	p := NewParser(buff)
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtainedTs := p.header.timestamp
+
+	// Comparing the Unix timestamp part only, as time zones might differ
+	c.Assert(obtainedTs.Unix(), Equals, expectedTs.Unix())
+	c.Assert(obtainedTs.Nanosecond(), Equals, expectedTs.Nanosecond())
+}
+
 func (s *Rfc5424TestSuite) TestParseTimestamp_NilValue(c *C) {
 	buff := []byte("-")
 	ts := new(time.Time)
