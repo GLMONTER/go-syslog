@@ -82,6 +82,8 @@ func (p *Parser) Location(location *time.Location) {
 }
 
 func (p *Parser) Parse() error {
+	p.message = string(p.buff)
+
 	hdr, err := p.parseHeader()
 	if err != nil {
 		return err
@@ -96,10 +98,6 @@ func (p *Parser) Parse() error {
 
 	p.structuredData = sd
 	p.cursor++
-
-	if p.cursor < p.l {
-		p.message = string(p.buff[p.cursor:])
-	}
 
 	return nil
 }
@@ -260,7 +258,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 	var ts time.Time
 
 	if p.cursor >= p.l {
-		return ts, ErrInvalidTimeFormat
+		return ts, fmt.Errorf("%v %s", ErrInvalidTimeFormat, string(p.buff))
 	}
 
 	if p.buff[p.cursor] == NILVALUE {
@@ -283,7 +281,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 	}
 
 	if p.cursor >= p.l || p.buff[p.cursor] != 'T' {
-		return ts, ErrInvalidTimeFormat
+		return ts, fmt.Errorf("%v %s", ErrInvalidTimeFormat, string(p.buff))
 	}
 
 	p.cursor++
@@ -451,7 +449,7 @@ func parsePartialTime(buff []byte, cursor *int, l int) (partialTime, error) {
 	}
 
 	if *cursor >= l || buff[*cursor] != ':' {
-		return pt, ErrInvalidTimeFormat
+		return pt, fmt.Errorf("%v %s", ErrInvalidTimeFormat, string(buff))
 	}
 
 	*cursor++
@@ -578,7 +576,7 @@ func getHourMinute(buff []byte, cursor *int, l int) (int, int, error) {
 	}
 
 	if *cursor >= l || buff[*cursor] != ':' {
-		return 0, 0, ErrInvalidTimeFormat
+		return 0, 0, fmt.Errorf("%v %s", ErrInvalidTimeFormat, string(buff))
 	}
 
 	*cursor++
@@ -620,7 +618,7 @@ func parseStructuredData(buff []byte, cursor *int, l int) (string, error) {
 	}
 
 	if buff[*cursor] != '[' {
-		return sdData, ErrNoStructuredData
+		return sdData, fmt.Errorf("%v %s", ErrNoStructuredData, string(buff))
 	}
 
 	from := *cursor
@@ -648,7 +646,7 @@ func parseStructuredData(buff []byte, cursor *int, l int) (string, error) {
 		return string(buff[from:to]), nil
 	}
 
-	return sdData, ErrNoStructuredData
+	return sdData, fmt.Errorf("%v %s", ErrNoStructuredData, string(buff))
 }
 
 func parseUpToLen(buff []byte, cursor *int, l int, maxLen int, e error) (string, error) {

@@ -1,7 +1,6 @@
 package rfc3164
 
 import (
-	"bytes"
 	"os"
 	"time"
 
@@ -47,15 +46,11 @@ func (p *Parser) Parse() error {
 	tcursor := p.cursor
 	pri, err := p.parsePriority()
 	if err != nil {
+		p.message = rfc3164message{content: string(p.buff)}
 		// RFC3164 sec 4.3.3
 		p.priority = syslogparser.Priority{13, syslogparser.Facility{Value: 1}, syslogparser.Severity{Value: 5}}
 		p.cursor = tcursor
-		content, err := p.parseContent()
 		p.header.timestamp = time.Now().Round(time.Second)
-		if err != syslogparser.ErrEOL {
-			return err
-		}
-		p.message = rfc3164message{content: content}
 		return nil
 	}
 
@@ -135,12 +130,7 @@ func (p *Parser) parsemessage() (rfc3164message, error) {
 		msg.tag = tag
 	}
 
-	content, err := p.parseContent()
-	if err != syslogparser.ErrEOL {
-		return msg, err
-	}
-
-	msg.content = content
+	msg.content = string(p.buff)
 
 	return msg, err
 }
@@ -264,17 +254,6 @@ func (p *Parser) parseTag() (string, error) {
 	}
 
 	return string(tag), err
-}
-
-func (p *Parser) parseContent() (string, error) {
-	if p.cursor > p.l {
-		return "", syslogparser.ErrEOL
-	}
-
-	content := bytes.Trim(p.buff[p.cursor:p.l], " ")
-	p.cursor += len(content)
-
-	return string(content), syslogparser.ErrEOL
 }
 
 func fixTimestampIfNeeded(ts *time.Time) {
