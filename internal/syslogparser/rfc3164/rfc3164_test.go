@@ -1,7 +1,6 @@
 package rfc3164
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
@@ -46,7 +45,7 @@ func (s *Rfc3164TestSuite) TestParser_Valid(c *C) {
 		"timestamp": time.Date(now.Year(), time.October, 11, 22, 14, 15, 0, time.UTC),
 		"hostname":  "mymachine",
 		"tag":       "very.large.syslog.message.tag",
-		"content":   "'su root' failed for lonvick on /dev/pts/8",
+		"content":   "<34>Oct 11 22:14:15 mymachine very.large.syslog.message.tag: 'su root' failed for lonvick on /dev/pts/8",
 		"priority":  34,
 		"facility":  4,
 		"severity":  2,
@@ -78,7 +77,7 @@ func (s *Rfc3164TestSuite) TestParser_ValidNoTag(c *C) {
 		"timestamp": time.Date(now.Year(), time.October, 11, 22, 14, 15, 0, time.UTC),
 		"hostname":  "mymachine",
 		"tag":       "",
-		"content":   "singleword",
+		"content":   "<34>Oct 11 22:14:15 mymachine singleword",
 		"priority":  34,
 		"facility":  4,
 		"severity":  2,
@@ -116,7 +115,7 @@ func (s *Rfc3164TestSuite) TestParser_NoTimestamp(c *C) {
 		"timestamp": now,
 		"hostname":  "",
 		"tag":       "",
-		"content":   "INFO     leaving (1) step postscripts",
+		"content":   "<14>INFO     leaving (1) step postscripts",
 		"priority":  14,
 		"facility":  1,
 		"severity":  6,
@@ -205,7 +204,7 @@ func (s *Rfc3164TestSuite) TestParser_ValidRFC3339Timestamp(c *C) {
 		"timestamp": time.Date(2018, time.January, 12, 22, 14, 15, 0, time.UTC),
 		"hostname":  "mymachine",
 		"tag":       "app",
-		"content":   "msg",
+		"content":   "<34>2018-01-12T22:14:15+00:00 mymachine app[101]: msg",
 		"priority":  34,
 		"facility":  4,
 		"severity":  2,
@@ -225,7 +224,7 @@ func (s *Rfc3164TestSuite) TestParsemessage_Valid(c *C) {
 	buff := []byte("sometag[123]: " + content)
 	hdr := rfc3164message{
 		tag:     "sometag",
-		content: content,
+		content: string(buff),
 	}
 
 	s.assertRfc3164message(c, hdr, buff, len(buff), syslogparser.ErrEOL)
@@ -297,17 +296,6 @@ func (s *Rfc3164TestSuite) TestParseTag_NoTag(c *C) {
 	tag := ""
 
 	s.assertTag(c, tag, buff, 0, nil)
-}
-
-func (s *Rfc3164TestSuite) TestParseContent_Valid(c *C) {
-	buff := []byte(" foo bar baz quux ")
-	content := string(bytes.Trim(buff, " "))
-
-	p := NewParser(buff)
-	obtained, err := p.parseContent()
-	c.Assert(err, Equals, syslogparser.ErrEOL)
-	c.Assert(obtained, Equals, content)
-	c.Assert(p.cursor, Equals, len(content))
 }
 
 func (s *Rfc3164TestSuite) BenchmarkParseTimestamp(c *C) {

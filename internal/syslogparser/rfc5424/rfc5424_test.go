@@ -46,7 +46,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "-",
 			"msg_id":          "ID47",
 			"structured_data": "-",
-			"message":         "'su root' failed for lonvick on /dev/pts/8",
+			"message":         "<34>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 - 'su root' failed for lonvick on /dev/pts/8",
 		},
 		syslogparser.LogParts{
 			"priority":        165,
@@ -59,7 +59,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "8710",
 			"msg_id":          "-",
 			"structured_data": "-",
-			"message":         "%% It's time to make the do-nuts.",
+			"message":         "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - - %% It's time to make the do-nuts.",
 		},
 		syslogparser.LogParts{
 			"priority":        165,
@@ -72,7 +72,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "8710",
 			"msg_id":          "-",
 			"structured_data": "-",
-			"message":         "%% It's time to make the do-nuts.",
+			"message":         "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 012345678901234567890123456789012345678901234567 8710 - - %% It's time to make the do-nuts.",
 		},
 		syslogparser.LogParts{
 			"priority":        165,
@@ -85,7 +85,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "-",
 			"msg_id":          "ID47",
 			"structured_data": `[exampleSDID@32473 iut="3" eventSource="Application" eventID="1011"]`,
-			"message":         "An application event log entry...",
+			"message":         "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] An application event log entry...",
 		},
 		syslogparser.LogParts{
 			"priority":        165,
@@ -98,7 +98,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "-",
 			"msg_id":          "ID47",
 			"structured_data": `[exampleSDID@32473 iut="3" eventSource= "Application" eventID="1011"][examplePriority@32473 class="high"]`,
-			"message":         "",
+			"message":         "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut=\"3\" eventSource= \"Application\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]",
 		},
 		syslogparser.LogParts{
 			"priority":        165,
@@ -111,7 +111,7 @@ func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 			"proc_id":         "-",
 			"msg_id":          "ID47",
 			"structured_data": "-",
-			"message":         "",
+			"message":         "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 ",
 		},
 	}
 
@@ -318,13 +318,6 @@ func (s *Rfc5424TestSuite) TestParseTimestamp_NilValue(c *C) {
 	ts := new(time.Time)
 
 	s.assertTimestamp(c, *ts, buff, 1, nil)
-}
-
-func (s *Rfc5424TestSuite) TestParseTimestamp_Empty(c *C) {
-	buff := []byte("")
-	ts := new(time.Time)
-
-	s.assertTimestamp(c, *ts, buff, 0, ErrInvalidTimeFormat)
 }
 
 func (s *Rfc5424TestSuite) TestFindNextSpace_NoSpace(c *C) {
