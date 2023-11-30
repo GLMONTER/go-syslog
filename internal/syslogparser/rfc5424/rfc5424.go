@@ -190,25 +190,39 @@ func (p *Parser) parseVersion() (int, error) {
 	return syslogparser.ParseVersion(p.buff, &p.cursor, p.l)
 }
 
-// isUnixTimestamp checks if the buffer at the current cursor position is a Unix timestamp.
+// isUnixTimestamp checks if the buffer at the current cursor position starts with a Unix timestamp.
 func isUnixTimestamp(buff []byte, cursor *int, l int) bool {
-	//example of what we are looking for : 1701233380.285170542
 	startPos := *cursor
 	dotEncountered := false
+	digitCount := 0
 
 	for i := startPos; i < l; i++ {
 		if buff[i] == '.' {
-			dotEncountered = true
+			if digitCount >= 10 { // Ensure at least 10 digits before the dot
+				dotEncountered = true
+				continue
+			} else {
+				return false // Not enough digits before the dot
+			}
+		}
+
+		if syslogparser.IsDigit(buff[i]) {
+			digitCount++
 			continue
 		}
 
-		if !dotEncountered && i-startPos >= 10 {
+		// If we have encountered a dot and have sufficient digits, it's a Unix timestamp
+		if dotEncountered && digitCount >= 10 {
 			return true
 		}
 
-		if !syslogparser.IsDigit(buff[i]) {
-			break
+		// If we have sufficient digits but no dot, still consider it a Unix timestamp
+		if digitCount >= 10 {
+			return true
 		}
+
+		// If we encounter a non-digit, non-dot character, break the loop
+		break
 	}
 
 	return false
