@@ -52,6 +52,7 @@ func NewServer() *Server {
 	},
 
 		datagramChannelSize: datagramChannelBufferSize,
+		ErrChan:             make(chan error),
 	}
 }
 
