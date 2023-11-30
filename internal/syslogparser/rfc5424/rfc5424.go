@@ -5,6 +5,7 @@ package rfc5424
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"time"
@@ -252,6 +253,7 @@ func parseUnixTimestamp(buff []byte, cursor *int, l int) (time.Time, error) {
 	sec := intPart
 	nsec := fracPart * int64(math.Pow10(9-len(fracPartStr)))
 	ts := time.Unix(sec, nsec)
+	log.Printf("ret : %v", ts)
 	return ts, nil
 }
 
@@ -270,11 +272,14 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 
 	// Check if the timestamp is in Unix format (e.g., 1701233380.285170542)
 	if isUnixTimestamp(p.buff, &p.cursor, p.l) {
+		log.Println("timestamp is unix")
 		unixTs, err := parseUnixTimestamp(p.buff, &p.cursor, p.l)
 		if err != nil {
 			return ts, err
 		}
 		return unixTs, nil
+	} else {
+		log.Println("timestamp is not unix")
 	}
 
 	fd, err := parseFullDate(p.buff, &p.cursor, p.l)
