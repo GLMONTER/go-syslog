@@ -319,6 +319,9 @@ func (s *Server) Kill() error {
 	if s.datagramChannel != nil {
 		close(s.datagramChannel)
 	}
+	if s.ErrChan != nil {
+		close(s.ErrChan)
+	}
 	return nil
 }
 
