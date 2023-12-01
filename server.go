@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -372,6 +373,7 @@ func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
 				if (ok) && !opError.Temporary() && !opError.Timeout() {
 					return
 				}
+				log.Println("waiting")
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
