@@ -303,6 +303,7 @@ func (s *Server) parser(line []byte, client string, tlsPeer string) {
 
 // Kill the server
 func (s *Server) Kill() error {
+	log.Println("killing cons")
 	for _, connection := range s.connections {
 		err := connection.Close()
 		if err != nil {
@@ -310,12 +311,16 @@ func (s *Server) Kill() error {
 		}
 	}
 
+	log.Println("killing list")
+
 	for _, listener := range s.listeners {
 		err := listener.Close()
 		if err != nil {
 			return err
 		}
 	}
+	log.Println("closing channels")
+
 	// Only need to close channel once to broadcast to all waiting
 	if s.doneTcp != nil {
 		close(s.doneTcp)
@@ -326,6 +331,8 @@ func (s *Server) Kill() error {
 	if s.ErrChan != nil {
 		close(s.ErrChan)
 	}
+	log.Println("closed channels")
+
 	return nil
 }
 
@@ -375,8 +382,9 @@ func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
 				// there has been an error. Either the server has been killed
 				// or may be getting a transitory error due to (e.g.) the
 				// interface being shutdown in which case sleep() to avoid busy wait.
-				var opError *net.OpError
-				ok := errors.As(err, &opError)
+				//var opError *net.OpError
+				//ok := errors.As(err, &opError)
+				opError, ok := err.(*net.OpError)
 				if (ok) && !opError.Temporary() && !opError.Timeout() {
 					return
 				}
