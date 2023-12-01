@@ -187,6 +187,7 @@ func (s *Server) Boot() error {
 
 func (s *Server) goAcceptConnection(listener net.Listener) {
 	s.wait.Add(1)
+	log.Println("add accept conn")
 	go func(listener net.Listener) {
 	loop:
 		for {
@@ -202,7 +203,7 @@ func (s *Server) goAcceptConnection(listener net.Listener) {
 
 			s.goScanConnection(connection)
 		}
-
+		log.Println("done go accept")
 		s.wait.Done()
 	}(listener)
 }
@@ -246,6 +247,7 @@ func (s *Server) goScanConnection(connection net.Conn) {
 	scanCloser = &ScanCloser{scanner, connection}
 
 	s.wait.Add(1)
+	log.Println("add go scan")
 	go s.scan(scanCloser, client, tlsPeer)
 }
 
@@ -274,6 +276,7 @@ loop:
 		go func() { s.ErrChan <- err }()
 	}
 
+	log.Println("done scan")
 	s.wait.Done()
 }
 
@@ -348,8 +351,12 @@ type DatagramMessage struct {
 
 func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
 	s.wait.Add(1)
+	log.Println("add rec data")
 	go func() {
-		defer s.wait.Done()
+		defer func() {
+			s.wait.Done()
+			log.Println("done rec data")
+		}()
 		for {
 			buf := s.datagramPool.Get().([]byte)
 			n, addr, err := packetconn.ReadFrom(buf)
@@ -384,8 +391,12 @@ func (s *Server) goParseDatagrams() {
 	s.datagramChannel = make(chan DatagramMessage, s.datagramChannelSize)
 
 	s.wait.Add(1)
+	log.Println("add go parse data")
 	go func() {
-		defer s.wait.Done()
+		defer func() {
+			log.Println("done go parse data")
+			s.wait.Done()
+		}()
 		for {
 			select {
 			case msg, ok := <-s.datagramChannel:
