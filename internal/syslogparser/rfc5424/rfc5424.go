@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/GLMONTER/go-syslog/internal/syslogparser"
@@ -93,8 +92,8 @@ func (p *Parser) Parse() error {
 
 	p.header = hdr
 
-	//if the timestamp is a unix timestamp and the hostname is an MX model name or is the Z4C model name, we can infer it is a cisco Meraki device
-	if p.isUnixTimestamp && (strings.Contains(p.header.hostname, "MX") || strings.Contains(p.header.hostname, "Z4C")) {
+	//if the timestamp is a unix timestamp, we can infer it is a cisco Meraki device
+	if p.isUnixTimestamp {
 		//we don't want to try and attempt to parse structured data for Meraki logs
 		p.structuredData = "-"
 		return nil
