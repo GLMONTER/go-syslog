@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GLMONTER/go-syslog/internal/syslogparser"
@@ -33,12 +34,13 @@ var (
 )
 
 type Parser struct {
-	buff           []byte
-	cursor         int
-	l              int
-	header         header
-	structuredData string
-	message        string
+	buff            []byte
+	cursor          int
+	l               int
+	header          header
+	structuredData  string
+	message         string
+	isUnixTimestamp bool
 }
 
 type header struct {
@@ -91,6 +93,12 @@ func (p *Parser) Parse() error {
 
 	p.header = hdr
 
+	//if the timestamp is a unix timestamp and the hostname is an MX model name or is the Z4C model name, we can infer it is a cisco Meraki device
+	if p.isUnixTimestamp && (strings.Contains(p.header.hostname, "MX") || strings.Contains(p.header.hostname, "Z4C")) {
+		//we don't want to try and attempt to parse structured data for Meraki logs
+		p.structuredData = strconv.Itoa(int(NILVALUE))
+		return nil
+	}
 	sd, err := p.parseStructuredData()
 	if err != nil {
 		return err
@@ -268,6 +276,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 
 	// Check if the timestamp is in Unix format (e.g., 1701233380.285170542)
 	if isUnixTimestamp(p.buff, &p.cursor, p.l) {
+		p.isUnixTimestamp = true
 		unixTs, err := parseUnixTimestamp(p.buff, &p.cursor, p.l)
 		if err != nil {
 			return ts, err
