@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -187,7 +186,7 @@ func (s *Server) Boot() error {
 
 func (s *Server) goAcceptConnection(listener net.Listener) {
 	s.wait.Add(1)
-	log.Println("add accept conn")
+
 	go func(listener net.Listener) {
 	loop:
 		for {
@@ -203,7 +202,6 @@ func (s *Server) goAcceptConnection(listener net.Listener) {
 
 			s.goScanConnection(connection)
 		}
-		log.Println("done go accept")
 		s.wait.Done()
 	}(listener)
 }
@@ -247,7 +245,6 @@ func (s *Server) goScanConnection(connection net.Conn) {
 	scanCloser = &ScanCloser{scanner, connection}
 
 	s.wait.Add(1)
-	log.Println("add go scan")
 	go s.scan(scanCloser, client, tlsPeer)
 }
 
@@ -276,7 +273,6 @@ loop:
 		go func() { s.ErrChan <- err }()
 	}
 
-	log.Println("done scan")
 	s.wait.Done()
 }
 
@@ -303,7 +299,6 @@ func (s *Server) parser(line []byte, client string, tlsPeer string) {
 
 // Kill the server
 func (s *Server) Kill() error {
-	log.Println("killing cons")
 	for _, connection := range s.connections {
 		err := connection.Close()
 		if err != nil {
@@ -311,15 +306,12 @@ func (s *Server) Kill() error {
 		}
 	}
 
-	log.Println("killing list")
-
 	for _, listener := range s.listeners {
 		err := listener.Close()
 		if err != nil {
 			return err
 		}
 	}
-	log.Println("closing channels")
 
 	// Only need to close channel once to broadcast to all waiting
 	if s.doneTcp != nil {
@@ -331,7 +323,6 @@ func (s *Server) Kill() error {
 	if s.ErrChan != nil {
 		close(s.ErrChan)
 	}
-	log.Println("closed channels")
 
 	return nil
 }
@@ -358,12 +349,9 @@ type DatagramMessage struct {
 
 func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
 	s.wait.Add(1)
-	log.Println("add rec data")
 	go func() {
-		defer func() {
-			s.wait.Done()
-			log.Println("done rec data")
-		}()
+		defer s.wait.Done()
+
 		for {
 			buf := s.datagramPool.Get().([]byte)
 			n, addr, err := packetconn.ReadFrom(buf)
@@ -382,13 +370,11 @@ func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
 				// there has been an error. Either the server has been killed
 				// or may be getting a transitory error due to (e.g.) the
 				// interface being shutdown in which case sleep() to avoid busy wait.
-				//var opError *net.OpError
-				//ok := errors.As(err, &opError)
-				opError, ok := err.(*net.OpError)
+				var opError *net.OpError
+				ok := errors.As(err, &opError)
 				if (ok) && !opError.Temporary() && !opError.Timeout() {
 					return
 				}
-				log.Println("waiting")
 				time.Sleep(10 * time.Millisecond)
 			}
 		}
@@ -399,12 +385,9 @@ func (s *Server) goParseDatagrams() {
 	s.datagramChannel = make(chan DatagramMessage, s.datagramChannelSize)
 
 	s.wait.Add(1)
-	log.Println("add go parse data")
 	go func() {
-		defer func() {
-			log.Println("done go parse data")
-			s.wait.Done()
-		}()
+		defer s.wait.Done()
+
 		for {
 			select {
 			case msg, ok := <-s.datagramChannel:

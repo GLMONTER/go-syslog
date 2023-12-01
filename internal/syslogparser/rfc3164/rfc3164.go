@@ -2,6 +2,7 @@ package rfc3164
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"time"
 
@@ -189,7 +190,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 			p.cursor++
 		}
 
-		return ts, syslogparser.ErrTimestampUnknownFormat
+		return ts, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(p.buff))
 	}
 
 	fixTimestampIfNeeded(&ts)

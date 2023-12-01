@@ -296,7 +296,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 
 	ft, err := parseFullTime(p.buff, &p.cursor, p.l)
 	if err != nil {
-		return ts, syslogparser.ErrTimestampUnknownFormat
+		return ts, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(p.buff))
 	}
 
 	nSec, err := toNSec(ft.pt.secFrac)
@@ -358,7 +358,7 @@ func parseFullDate(buff []byte, cursor *int, l int) (fullDate, error) {
 	}
 
 	if *cursor >= l || buff[*cursor] != '-' {
-		return fd, syslogparser.ErrTimestampUnknownFormat
+		return fd, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(buff))
 	}
 
 	*cursor++
@@ -369,7 +369,7 @@ func parseFullDate(buff []byte, cursor *int, l int) (fullDate, error) {
 	}
 
 	if *cursor >= l || buff[*cursor] != '-' {
-		return fd, syslogparser.ErrTimestampUnknownFormat
+		return fd, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(buff))
 	}
 
 	*cursor++
