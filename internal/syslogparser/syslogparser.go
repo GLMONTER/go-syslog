@@ -28,6 +28,7 @@ var (
 	ErrVersionNotFound = &ParserError{"Can not find version"}
 
 	ErrTimestampUnknownFormat = &ParserError{"Timestamp format unknown"}
+	ErrSonicOSFormat          = &ParserError{"SonicOS Format"}
 
 	ErrHostnameTooShort = &ParserError{"Hostname field too short"}
 )

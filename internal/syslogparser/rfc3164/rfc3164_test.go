@@ -22,6 +22,36 @@ var (
 	lastTriedTimestampLen = 15
 )
 
+func (s *Rfc3164TestSuite) TestParserSonicWall_Valid(c *C) {
+	buff := []byte(`<34>id=firewall sn=18B1690729A8 fw=10.205.123.15 time="2016-08-19 18:05:44 UTC" pri=1 c=32 m=609 msg="IPS Prevention Alert: DNS named version attempt" sid=143 ipscat=DNS ipspri=3 n=3 src=192.168.169.180:2907 dst=172.16.2.11:53`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:     buff,
+		cursor:   0,
+		l:        len(buff),
+		location: time.UTC,
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+	expected := syslogparser.LogParts{
+		"timestamp": time.Date(2016, time.August, 19, 18, 5, 44, 0, time.UTC),
+		"hostname":  "",
+		"tag":       "",
+		"content":   `<34>id=firewall sn=18B1690729A8 fw=10.205.123.15 time="2016-08-19 18:05:44 UTC" pri=1 c=32 m=609 msg="IPS Prevention Alert: DNS named version attempt" sid=143 ipscat=DNS ipspri=3 n=3 src=192.168.169.180:2907 dst=172.16.2.11:53`,
+		"priority":  34,
+		"facility":  4,
+		"severity":  2,
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
 func (s *Rfc3164TestSuite) TestParser_Valid(c *C) {
 	buff := []byte("<34>Oct 11 22:14:15 mymachine very.large.syslog.message.tag: 'su root' failed for lonvick on /dev/pts/8")
 

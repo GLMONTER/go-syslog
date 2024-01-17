@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/GLMONTER/go-syslog/internal/syslogparser"
@@ -44,13 +46,49 @@ func (p *Parser) Location(location *time.Location) {
 	p.location = location
 }
 
+func (p *Parser) parseSonicWallHeader() (header, error) {
+	//SonicOS log, do a regex parse because it is not standard
+	//example log : <134>id=firewall sn=18B1690729A8 fw=10.205.123.15 time="2016-08-19 18:05:44" pri=1 c=32 m=609 msg="IPS Prevention Alert: DNS named version attempt" sid=143 ipscat=DNS ipspri=3 n=3 src=192.168.169.180:2907 dst=172.16.2.11:53
+	pattern := `time="([^"]+)"`
+	re := regexp.MustCompile(pattern)
+	match := re.FindStringSubmatch(string(p.buff))
+
+	var timestamp string
+	if match != nil && len(match) > 1 {
+		timestamp = match[1]
+	}
+
+	potentialLayouts := []string{
+		"2006-01-02 15:04:05 MST",
+		"2006-01-02 15:04:05",
+	}
+
+	var parsedTime time.Time
+	var err error
+	for _, layout := range potentialLayouts {
+		parsedTime, err = time.ParseInLocation(layout, timestamp, p.location)
+		if err == nil {
+			fixTimestampIfNeeded(&parsedTime)
+			break
+		}
+	}
+	if err != nil {
+		return header{}, fmt.Errorf("failed to parse time in SonicWall log: %v : %s", err, string(p.buff))
+	}
+
+	return header{
+		timestamp: parsedTime,
+		hostname:  "",
+	}, nil
+}
+
 func (p *Parser) Parse() error {
 	tcursor := p.cursor
 	pri, err := p.parsePriority()
 	if err != nil {
 		p.message = rfc3164message{content: string(p.buff)}
 		// RFC3164 sec 4.3.3
-		p.priority = syslogparser.Priority{13, syslogparser.Facility{Value: 1}, syslogparser.Severity{Value: 5}}
+		p.priority = syslogparser.Priority{P: 13, F: syslogparser.Facility{Value: 1}, S: syslogparser.Severity{Value: 5}}
 		p.cursor = tcursor
 		p.header.timestamp = time.Now().Round(time.Second)
 		err = p.movePastContent()
@@ -61,8 +99,16 @@ func (p *Parser) Parse() error {
 	}
 
 	tcursor = p.cursor
+	var skipMessageParse bool
 	hdr, err := p.parseHeader()
-	if err == syslogparser.ErrTimestampUnknownFormat {
+	if err == syslogparser.ErrSonicOSFormat {
+		skipMessageParse = true
+
+		hdr, err = p.parseSonicWallHeader()
+		if err != nil {
+			return err
+		}
+	} else if strings.Contains(fmt.Sprintf("%s", err), syslogparser.ErrTimestampUnknownFormat.ErrorString) {
 		// RFC3164 sec 4.3.2.
 		hdr.timestamp = time.Now().Round(time.Second)
 		// No tag processing should be done
@@ -75,15 +121,22 @@ func (p *Parser) Parse() error {
 		p.cursor++
 	}
 
-	msg, err := p.parsemessage()
-	if err != syslogparser.ErrEOL {
-		return err
+	if !skipMessageParse {
+		msg, err := p.parsemessage()
+		if err != syslogparser.ErrEOL {
+			return err
+		}
+		p.message = msg
+	} else {
+		p.message = rfc3164message{
+			tag:     "",
+			content: string(p.buff),
+		}
 	}
 
 	p.priority = pri
 	p.version = syslogparser.NO_VERSION
 	p.header = hdr
-	p.message = msg
 
 	return nil
 }
@@ -190,6 +243,12 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 			p.cursor++
 		}
 
+		//sonicOS has their own syslog format documented here, we try and detect their timestamp format if we run into an error
+		//https://www.sonicwall.com/techdocs/pdf/sonicos-6-5-1-log-events-reference-guide.pdf
+		if strings.Contains(string(p.buff), `time="`) {
+			return ts, syslogparser.ErrSonicOSFormat
+		}
+
 		return ts, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(p.buff))
 	}
 
@@ -207,7 +266,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 func (p *Parser) parseHostname() (string, error) {
 	oldcursor := p.cursor
 	hostname, err := syslogparser.ParseHostname(p.buff, &p.cursor, p.l)
-	if err == nil && len(hostname) > 0 && string(hostname[len(hostname)-1]) == ":" { // not an hostname! we found a GNU implementation of syslog()
+	if err == nil && len(hostname) > 0 && string(hostname[len(hostname)-1]) == ":" { // not a hostname! we found a GNU implementation of syslog()
 		p.cursor = oldcursor - 1
 		myhostname, err := os.Hostname()
 		if err == nil {
