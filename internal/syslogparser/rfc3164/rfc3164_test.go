@@ -52,6 +52,36 @@ func (s *Rfc3164TestSuite) TestParserSonicWall_Valid(c *C) {
 	c.Assert(obtained, DeepEquals, expected)
 }
 
+func (s *Rfc3164TestSuite) TestParserFortiOS_Valid(c *C) {
+	buff := []byte(`<133>date=2024-01-31 time=13:36:54 devname="Y21FS1-101F" devid="FGUSI@#J%JI@I" eventtime=1706726214463347261 tz="-0500" logid="0000000011" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.2.2.30 srcport=50295 srcintf="almi-f5s" srcintfrole="undefined" dstip=10.3.1.1 dstport=90 dstintf="sr929" dstintfrole="lan" srccountry="Reserved" dstcountry="Reserved" sessionid=1583922 proto=3 action="start" policyid=905 policytype="policy" poluuid="fjkdsljjlk-5u39582305-573289527358" policyname="FIREWALL_POLICY" user="USER_ADMIN" authserver="AGENT_FO" dstuser="SVC_USER" centralnatid=5 service="TESTSERV" trandisp="noop" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 vpntype="ipsecvpn" appcat="unscanned"`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:     buff,
+		cursor:   0,
+		l:        len(buff),
+		location: time.UTC,
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+	expected := syslogparser.LogParts{
+		"timestamp": time.Date(2024, time.January, 31, 18, 36, 54, 463347261, time.UTC),
+		"hostname":  "",
+		"tag":       "",
+		"content":   `<133>date=2024-01-31 time=13:36:54 devname="Y21FS1-101F" devid="FGUSI@#J%JI@I" eventtime=1706726214463347261 tz="-0500" logid="0000000011" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.2.2.30 srcport=50295 srcintf="almi-f5s" srcintfrole="undefined" dstip=10.3.1.1 dstport=90 dstintf="sr929" dstintfrole="lan" srccountry="Reserved" dstcountry="Reserved" sessionid=1583922 proto=3 action="start" policyid=905 policytype="policy" poluuid="fjkdsljjlk-5u39582305-573289527358" policyname="FIREWALL_POLICY" user="USER_ADMIN" authserver="AGENT_FO" dstuser="SVC_USER" centralnatid=5 service="TESTSERV" trandisp="noop" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 vpntype="ipsecvpn" appcat="unscanned"`,
+		"priority":  133,
+		"facility":  16,
+		"severity":  5,
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
 func (s *Rfc3164TestSuite) TestParser_Valid(c *C) {
 	buff := []byte("<34>Oct 11 22:14:15 mymachine very.large.syslog.message.tag: 'su root' failed for lonvick on /dev/pts/8")
 

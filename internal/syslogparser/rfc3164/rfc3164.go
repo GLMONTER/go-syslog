@@ -2,9 +2,11 @@ package rfc3164
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,6 +84,34 @@ func (p *Parser) parseSonicWallHeader() (header, error) {
 	}, nil
 }
 
+func (p *Parser) parseFortiOSHeader() (header, error) {
+	//FortiOS log, do a regex parse because it is not standard
+	//example log : <133>date=2024-01-31 time=13:36:54 devname="Y21FS1-101F" devid="FGUSI@#J%JI@I" eventtime=1706726214463347261 tz="-0500" logid="0000000011" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.2.2.30 srcport=50295 srcintf="almi-f5s" srcintfrole="undefined" dstip=10.3.1.1 dstport=90 dstintf="sr929" dstintfrole="lan" srccountry="Reserved" dstcountry="Reserved" sessionid=1583922 proto=3 action="start" policyid=905 policytype="policy" poluuid="fjkdsljjlk-5u39582305-573289527358" policyname="FIREWALL_POLICY" user="USER_ADMIN" authserver="AGENT_FO" dstuser="SVC_USER" centralnatid=5 service="TESTSERV" trandisp="noop" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 vpntype="ipsecvpn" appcat="unscanned"
+	pattern := `eventtime=(\d+)`
+	re := regexp.MustCompile(pattern)
+	match := re.FindStringSubmatch(string(p.buff))
+
+	var timestamp string
+	if match != nil && len(match) > 1 {
+		timestamp = match[1]
+	}
+
+	timeNum, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return header{}, fmt.Errorf("failed to convert FortiOS event time to int: %v : %s", err, string(p.buff))
+	}
+	seconds := timeNum / int64(time.Second)
+	nanoseconds := timeNum % int64(time.Second)
+	parsedTime := time.Unix(seconds, nanoseconds)
+	parsedTime = parsedTime.UTC()
+	fixTimestampIfNeeded(&parsedTime)
+
+	return header{
+		timestamp: parsedTime,
+		hostname:  "",
+	}, nil
+}
+
 func (p *Parser) Parse() error {
 	tcursor := p.cursor
 	pri, err := p.parsePriority()
@@ -101,10 +131,17 @@ func (p *Parser) Parse() error {
 	tcursor = p.cursor
 	var skipMessageParse bool
 	hdr, err := p.parseHeader()
-	if err == syslogparser.ErrSonicOSFormat {
+	if errors.Is(err, syslogparser.ErrSonicOSFormat) {
 		skipMessageParse = true
 
 		hdr, err = p.parseSonicWallHeader()
+		if err != nil {
+			return err
+		}
+	} else if errors.Is(err, syslogparser.ErrFortiOSFormat) {
+		skipMessageParse = true
+
+		hdr, err = p.parseFortiOSHeader()
 		if err != nil {
 			return err
 		}
@@ -115,6 +152,9 @@ func (p *Parser) Parse() error {
 		p.skipTag = true
 		// Reset cursor for content read
 		p.cursor = tcursor
+
+		//we should error for this
+		return err
 	} else if err != nil {
 		return err
 	} else {
@@ -247,6 +287,12 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 		//https://www.sonicwall.com/techdocs/pdf/sonicos-6-5-1-log-events-reference-guide.pdf
 		if strings.Contains(string(p.buff), `time="`) {
 			return ts, syslogparser.ErrSonicOSFormat
+		}
+
+		//FortiOS has their own syslog format and there is an example here, we try and detect their timestamp format if we run into an error
+		//https://docs.fortinet.com/document/fortigate/7.4.2/fortios-log-message-reference/357866/log-message-fields
+		if strings.Contains(string(p.buff), `eventtime=`) {
+			return ts, syslogparser.ErrFortiOSFormat
 		}
 
 		return ts, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(p.buff))
