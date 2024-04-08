@@ -48,16 +48,65 @@ func (p *Parser) Location(location *time.Location) {
 	p.location = location
 }
 
-func (p *Parser) parseSonicWallHeader() (header, error) {
-	//SonicOS log, do a regex parse because it is not standard
-	//example log : <134>id=firewall sn=18B1690729A8 fw=10.205.123.15 time="2016-08-19 18:05:44" pri=1 c=32 m=609 msg="IPS Prevention Alert: DNS named version attempt" sid=143 ipscat=DNS ipspri=3 n=3 src=192.168.169.180:2907 dst=172.16.2.11:53
-	pattern := `time="([^"]+)"`
-	re := regexp.MustCompile(pattern)
-	match := re.FindStringSubmatch(string(p.buff))
+const CiscoASATimestampRePattern = `^<\d+>:(\w{3} \d{2} \d{2}:\d{2}:\d{2}(?: [A-Z]+)?)`
+
+var ciscoASATimestampCaptureRe = regexp.MustCompile(CiscoASATimestampRePattern)
+
+func (p *Parser) parseCiscoASAHeader() (header, error) {
+	//Cisco ASA log, do a regex parse because it is not standard
+	//example log : <166>:Apr 04 19:28:05 EDT: %ASA-session-6-106100: access-list outside_access_in permitted tcp outside/125.252.156.24(57274) -> NEX-DMZ/10.58.1.552(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]
+	match := ciscoASATimestampCaptureRe.FindStringSubmatch(string(p.buff))
 
 	var timestamp string
 	if match != nil && len(match) > 1 {
 		timestamp = match[1]
+	}
+
+	potentialLayouts := []string{
+		"Jan 02 15:04:05 MST",
+		"Jan 02 15:04:05",
+	}
+
+	var parsedTime time.Time
+	var err error
+	for _, layout := range potentialLayouts {
+		parsedTime, err = time.ParseInLocation(layout, timestamp, p.location)
+		if err == nil {
+			fixTimestampIfNeeded(&parsedTime)
+			break
+		}
+	}
+	if err != nil {
+		return header{}, fmt.Errorf("failed to parse time in Cisco ASA log: %v : %s", err, string(p.buff))
+	}
+
+	return header{
+		timestamp: parsedTime,
+		hostname:  "",
+	}, nil
+}
+
+const SonicWallTimestampRePattern = `time="([^"]+)"`
+
+var sonicWallTimestampCaptureRe = regexp.MustCompile(SonicWallTimestampRePattern)
+
+const SonicWallHostnameRePattern = `fw=([0-9.]+)`
+
+var sonicWallHostnameCaptureRe = regexp.MustCompile(SonicWallHostnameRePattern)
+
+func (p *Parser) parseSonicWallHeader() (header, error) {
+	//SonicOS log, do a regex parse because it is not standard
+	//example log : <134>id=firewall sn=18B1690729A8 fw=10.205.123.15 time="2016-08-19 18:05:44" pri=1 c=32 m=609 msg="IPS Prevention Alert: DNS named version attempt" sid=143 ipscat=DNS ipspri=3 n=3 src=192.168.169.180:2907 dst=172.16.2.11:53
+	timestampMatch := sonicWallTimestampCaptureRe.FindStringSubmatch(string(p.buff))
+	var timestamp string
+	if timestampMatch != nil && len(timestampMatch) > 1 {
+		timestamp = timestampMatch[1]
+	}
+
+	hostnameMatch := sonicWallHostnameCaptureRe.FindStringSubmatch(string(p.buff))
+	var hostname string
+	if hostnameMatch != nil && len(hostnameMatch) > 1 {
+		hostname = hostnameMatch[1]
 	}
 
 	potentialLayouts := []string{
@@ -80,16 +129,18 @@ func (p *Parser) parseSonicWallHeader() (header, error) {
 
 	return header{
 		timestamp: parsedTime,
-		hostname:  "",
+		hostname:  hostname,
 	}, nil
 }
+
+const FortiOSTimestampRePattern = `eventtime=(\d+)`
+
+var fortiOSTimestampCaptureRe = regexp.MustCompile(FortiOSTimestampRePattern)
 
 func (p *Parser) parseFortiOSHeader() (header, error) {
 	//FortiOS log, do a regex parse because it is not standard
 	//example log : <133>date=2024-01-31 time=13:36:54 devname="Y21FS1-101F" devid="FGUSI@#J%JI@I" eventtime=1706726214463347261 tz="-0500" logid="0000000011" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.2.2.30 srcport=50295 srcintf="almi-f5s" srcintfrole="undefined" dstip=10.3.1.1 dstport=90 dstintf="sr929" dstintfrole="lan" srccountry="Reserved" dstcountry="Reserved" sessionid=1583922 proto=3 action="start" policyid=905 policytype="policy" poluuid="fjkdsljjlk-5u39582305-573289527358" policyname="FIREWALL_POLICY" user="USER_ADMIN" authserver="AGENT_FO" dstuser="SVC_USER" centralnatid=5 service="TESTSERV" trandisp="noop" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 vpntype="ipsecvpn" appcat="unscanned"
-	pattern := `eventtime=(\d+)`
-	re := regexp.MustCompile(pattern)
-	match := re.FindStringSubmatch(string(p.buff))
+	match := fortiOSTimestampCaptureRe.FindStringSubmatch(string(p.buff))
 
 	var timestamp string
 	if match != nil && len(match) > 1 {
@@ -142,6 +193,13 @@ func (p *Parser) Parse() error {
 		skipMessageParse = true
 
 		hdr, err = p.parseFortiOSHeader()
+		if err != nil {
+			return err
+		}
+	} else if errors.Is(err, syslogparser.ErrCiscoASAFormat) {
+		skipMessageParse = true
+
+		hdr, err = p.parseCiscoASAHeader()
 		if err != nil {
 			return err
 		}
@@ -238,6 +296,10 @@ func (p *Parser) parsemessage() (rfc3164message, error) {
 	return msg, err
 }
 
+const ciscoASAPriorityFormat = `<\d+>:`
+
+var ciscoASARegexp = regexp.MustCompile(ciscoASAPriorityFormat)
+
 // https://tools.ietf.org/html/rfc3164#section-4.1.2
 func (p *Parser) parseTimestamp() (time.Time, error) {
 	var ts time.Time
@@ -281,6 +343,11 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 		// XXX : further, in case it is a space
 		if (p.cursor < p.l) && (p.buff[p.cursor] == ' ') {
 			p.cursor++
+		}
+
+		//Cisco ASA firewalls have their priority/timestamp like <166>:Apr 04 19:28:05 EDT, lets use regex to detect it
+		if ciscoASARegexp.MatchString(string(p.buff)) {
+			return ts, syslogparser.ErrCiscoASAFormat
 		}
 
 		//sonicOS has their own syslog format documented here, we try and detect their timestamp format if we run into an error

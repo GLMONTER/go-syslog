@@ -30,6 +30,7 @@ var (
 	ErrTimestampUnknownFormat = &ParserError{"Timestamp format unknown"}
 	ErrSonicOSFormat          = &ParserError{"SonicOS Format"}
 	ErrFortiOSFormat          = &ParserError{"FortiOS Format"}
+	ErrCiscoASAFormat         = &ParserError{"Cisco ASA Format"}
 
 	ErrHostnameTooShort = &ParserError{"Hostname field too short"}
 )
