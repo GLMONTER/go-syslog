@@ -87,7 +87,7 @@ func (p *Parser) Location(location *time.Location) {
 
 func (p *Parser) Parse() error {
 	p.message = string(p.buff)
-	p.header.timestamp = time.Now().Round(time.Second)
+	p.header.timestamp = time.Now().UTC()
 
 	hdr, err := p.parseHeader()
 	if err != nil {
@@ -280,7 +280,7 @@ var ciscoASATimestampRegexp = regexp.MustCompile(ciscoASATimestampCapture)
 
 // https://tools.ietf.org/html/rfc5424#section-6.2.3
 func (p *Parser) parseTimestamp() (time.Time, error) {
-	ts := time.Now()
+	ts := time.Now().UTC()
 
 	if p.cursor >= p.l {
 		return ts, fmt.Errorf("%v %s", ErrInvalidTimeFormat, string(p.buff))

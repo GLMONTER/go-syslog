@@ -44,7 +44,7 @@ func (s *Rfc5424TestSuite) TestParserCiscoASA_Valid_RFC5424(c *C) {
 		"app_name":        "",
 		"proc_id":         "",
 		"msg_id":          "",
-		"structured_data": "",
+		"structured_data": "-",
 		"message":         "<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port",
 	}
 

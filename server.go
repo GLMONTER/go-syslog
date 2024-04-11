@@ -287,10 +287,10 @@ func (s *Server) parser(line []byte, client string, tlsPeer string) {
 
 	timestamp, ok := logParts["timestamp"]
 	if !ok {
-		logParts["timestamp"] = time.Now().Round(time.Second)
+		logParts["timestamp"] = time.Now().UTC()
 	}
 	if timestamp == "" {
-		timestamp = time.Now().Round(time.Second)
+		timestamp = time.Now().UTC()
 	}
 
 	logParts["client"] = client

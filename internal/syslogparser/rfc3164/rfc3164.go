@@ -173,7 +173,7 @@ func (p *Parser) parseFortiOSHeader() (header, error) {
 func (p *Parser) Parse() error {
 	tcursor := p.cursor
 	p.message = rfc3164message{content: string(p.buff)}
-	p.header.timestamp = time.Now().Round(time.Second)
+	p.header.timestamp = time.Now().UTC()
 
 	pri, err := p.parsePriority()
 	if err != nil {
@@ -181,7 +181,7 @@ func (p *Parser) Parse() error {
 		// RFC3164 sec 4.3.3
 		p.priority = syslogparser.Priority{P: 13, F: syslogparser.Facility{Value: 1}, S: syslogparser.Severity{Value: 5}}
 		p.cursor = tcursor
-		p.header.timestamp = time.Now().Round(time.Second)
+		p.header.timestamp = time.Now().UTC()
 		err = p.movePastContent()
 		if err != syslogparser.ErrEOL {
 			return err
@@ -464,7 +464,7 @@ func (p *Parser) movePastContent() error {
 }
 
 func fixTimestampIfNeeded(ts *time.Time) {
-	now := time.Now()
+	now := time.Now().UTC()
 	y := ts.Year()
 
 	if ts.Year() == 0 {
