@@ -31,6 +31,7 @@ var (
 	ErrSonicOSFormat          = &ParserError{"SonicOS Format"}
 	ErrFortiOSFormat          = &ParserError{"FortiOS Format"}
 	ErrCiscoASAFormat         = &ParserError{"Cisco ASA Format"}
+	ErrCiscoASARFC5424        = &ParserError{"Cisco ASA RFC5424"}
 
 	ErrHostnameTooShort = &ParserError{"Hostname field too short"}
 )

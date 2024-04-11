@@ -144,6 +144,10 @@ const FortiOSTimestampRePattern = `eventtime=(\d+)`
 
 var fortiOSTimestampCaptureRe = regexp.MustCompile(FortiOSTimestampRePattern)
 
+const ciscoASATimestampCapture = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
+
+var ciscoASATimestampRegexp = regexp.MustCompile(ciscoASATimestampCapture)
+
 func (p *Parser) parseFortiOSHeader() (header, error) {
 	//FortiOS log, do a regex parse because it is not standard
 	//example log : <133>date=2024-01-31 time=13:36:54 devname="Y21FS1-101F" devid="FGUSI@#J%JI@I" eventtime=1706726214463347261 tz="-0500" logid="0000000011" type="traffic" subtype="forward" level="notice" vd="root" srcip=10.2.2.30 srcport=50295 srcintf="almi-f5s" srcintfrole="undefined" dstip=10.3.1.1 dstport=90 dstintf="sr929" dstintfrole="lan" srccountry="Reserved" dstcountry="Reserved" sessionid=1583922 proto=3 action="start" policyid=905 policytype="policy" poluuid="fjkdsljjlk-5u39582305-573289527358" policyname="FIREWALL_POLICY" user="USER_ADMIN" authserver="AGENT_FO" dstuser="SVC_USER" centralnatid=5 service="TESTSERV" trandisp="noop" duration=0 sentbyte=0 rcvdbyte=0 sentpkt=0 rcvdpkt=0 vpntype="ipsecvpn" appcat="unscanned"
@@ -168,6 +172,21 @@ func (p *Parser) parseFortiOSHeader() (header, error) {
 		timestamp: parsedTime,
 		hostname:  "",
 	}, nil
+}
+
+func (p *Parser) parseCiscoASA_RFC5424() (header, error) {
+	//example log : <166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port
+	match := ciscoASATimestampRegexp.FindStringSubmatch(string(p.buff))
+	if match != nil && len(match) > 1 {
+		timestampStr := match[1]
+		parsedTime, err := time.Parse(time.RFC3339, timestampStr)
+		if err != nil {
+			return header{}, fmt.Errorf("failed to parse cisco ASA RFC5424 timestamp: %v", err)
+		}
+		fixTimestampIfNeeded(&parsedTime)
+		return header{timestamp: parsedTime, hostname: ""}, nil
+	}
+	return header{}, fmt.Errorf("failed to parse cisco ASA RFC5424 timestamp: %v", "no match")
 }
 
 func (p *Parser) Parse() error {
@@ -223,6 +242,14 @@ func (p *Parser) Parse() error {
 		skipMessageParse = true
 
 		hdr, err = p.parseCiscoASAHeader()
+		if err != nil {
+			setDefaultFail()
+			return err
+		}
+	} else if errors.Is(err, syslogparser.ErrCiscoASARFC5424) {
+		skipMessageParse = true
+
+		hdr, err = p.parseCiscoASA_RFC5424()
 		if err != nil {
 			setDefaultFail()
 			return err
@@ -311,6 +338,18 @@ func (p *Parser) parsemessage() (rfc3164message, error) {
 	return msg, err
 }
 
+const ciscoASA_RFC5424Format = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
+
+var ciscoASA_RFC5424Regexp = regexp.MustCompile(ciscoASA_RFC5424Format)
+
+func checkCiscoASA_RFC5424(buff []byte) bool {
+	if ciscoASA_RFC5424Regexp.MatchString(string(buff)) {
+		return true
+	}
+
+	return false
+}
+
 const ciscoASAPriorityFormat = `<\d+>:`
 
 var ciscoASARegexp = regexp.MustCompile(ciscoASAPriorityFormat)
@@ -375,6 +414,10 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 		//https://docs.fortinet.com/document/fortigate/7.4.2/fortios-log-message-reference/357866/log-message-fields
 		if strings.Contains(string(p.buff), `eventtime=`) {
 			return ts, syslogparser.ErrFortiOSFormat
+		}
+
+		if checkCiscoASA_RFC5424(p.buff) {
+			return ts, syslogparser.ErrCiscoASARFC5424
 		}
 
 		return ts, fmt.Errorf("%v %s", syslogparser.ErrTimestampUnknownFormat, string(p.buff))

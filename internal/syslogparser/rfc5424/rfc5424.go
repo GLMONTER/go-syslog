@@ -4,10 +4,8 @@
 package rfc5424
 
 import (
-	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -32,7 +30,6 @@ var (
 	ErrInvalidProcId     = &syslogparser.ParserError{"Invalid proc ID"}
 	ErrInvalidMsgId      = &syslogparser.ParserError{"Invalid msg ID"}
 	ErrNoStructuredData  = &syslogparser.ParserError{"No structured data"}
-	ErrCiscoASARFC5424   = &syslogparser.ParserError{"Cisco ASA RFC5424"}
 )
 
 type Parser struct {
@@ -91,12 +88,6 @@ func (p *Parser) Parse() error {
 
 	hdr, err := p.parseHeader()
 	if err != nil {
-		if errors.Is(err, ErrCiscoASARFC5424) {
-			p.header = hdr
-			p.structuredData = "-"
-			p.header.version = 1
-			return nil
-		}
 		return err
 	}
 
@@ -155,10 +146,6 @@ func (p *Parser) parseHeader() (header, error) {
 
 	ts, err := p.parseTimestamp()
 	if err != nil {
-		if errors.Is(err, ErrCiscoASARFC5424) {
-			hdr.timestamp = ts
-			return hdr, ErrCiscoASARFC5424
-		}
 		return hdr, err
 	}
 
@@ -274,10 +261,6 @@ func parseUnixTimestamp(buff []byte, cursor *int, l int) (time.Time, error) {
 	return time.Unix(sec, nsec), nil
 }
 
-const ciscoASATimestampCapture = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
-
-var ciscoASATimestampRegexp = regexp.MustCompile(ciscoASATimestampCapture)
-
 // https://tools.ietf.org/html/rfc5424#section-6.2.3
 func (p *Parser) parseTimestamp() (time.Time, error) {
 	ts := time.Now().UTC()
@@ -303,19 +286,7 @@ func (p *Parser) parseTimestamp() (time.Time, error) {
 
 	fd, err := parseFullDate(p.buff, &p.cursor, p.l)
 	if err != nil {
-		if errors.Is(err, ErrCiscoASARFC5424) {
-			match := ciscoASATimestampRegexp.FindStringSubmatch(string(p.buff))
-			if match != nil && len(match) > 1 {
-				timestampStr := match[1]
-				parsedTime, err := time.Parse(time.RFC3339, timestampStr)
-				if err != nil {
-					return ts, fmt.Errorf("failed to parse cisco ASA RFC5424 timestamp: %v", err)
-				}
-				return parsedTime, ErrCiscoASARFC5424
-			}
-		} else {
-			return ts, err
-		}
+		return ts, err
 	}
 
 	if p.cursor >= p.l || p.buff[p.cursor] != 'T' {
@@ -418,18 +389,6 @@ func parseFullDate(buff []byte, cursor *int, l int) (fullDate, error) {
 	return fd, nil
 }
 
-const ciscoASA_RFC5424Format = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
-
-var ciscoASA_RFC5424Regexp = regexp.MustCompile(ciscoASA_RFC5424Format)
-
-func checkCiscoASA_RFC5424(buff []byte) bool {
-	if ciscoASA_RFC5424Regexp.MatchString(string(buff)) {
-		return true
-	}
-
-	return false
-}
-
 // DATE-FULLYEAR   = 4DIGIT
 func parseYear(buff []byte, cursor *int, l int) (int, error) {
 	yearLen := 4
@@ -446,9 +405,6 @@ func parseYear(buff []byte, cursor *int, l int) (int, error) {
 
 	year, err := strconv.Atoi(sub)
 	if err != nil {
-		if checkCiscoASA_RFC5424(buff) {
-			return 0, ErrCiscoASARFC5424
-		}
 		return 0, ErrYearInvalid
 	}
 

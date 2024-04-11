@@ -23,6 +23,37 @@ var (
 	lastTriedTimestampLen = 15
 )
 
+func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid_RFC5424(c *C) {
+	buff := []byte(`<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:     buff,
+		cursor:   0,
+		l:        len(buff),
+		location: time.UTC,
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+
+	expected := syslogparser.LogParts{
+		"timestamp": time.Date(2018, time.June, 27, 12, 17, 46, 0, time.UTC),
+		"hostname":  "",
+		"tag":       "",
+		"content":   `<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port`,
+		"priority":  166,
+		"facility":  20,
+		"severity":  6,
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
 func (s *Rfc3164TestSuite) TestParserCiscoASA_NoTimestamp(c *C) {
 	buff := []byte(`<34>:%ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`)
 
