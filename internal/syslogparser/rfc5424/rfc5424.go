@@ -87,6 +87,7 @@ func (p *Parser) Location(location *time.Location) {
 
 func (p *Parser) Parse() error {
 	p.message = string(p.buff)
+	p.header.timestamp = time.Now().Round(time.Second)
 
 	hdr, err := p.parseHeader()
 	if err != nil {

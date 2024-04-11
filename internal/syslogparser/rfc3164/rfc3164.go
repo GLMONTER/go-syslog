@@ -173,6 +173,7 @@ func (p *Parser) parseFortiOSHeader() (header, error) {
 func (p *Parser) Parse() error {
 	tcursor := p.cursor
 	p.message = rfc3164message{content: string(p.buff)}
+	p.header.timestamp = time.Now().Round(time.Second)
 
 	pri, err := p.parsePriority()
 	if err != nil {
@@ -188,14 +189,26 @@ func (p *Parser) Parse() error {
 		return nil
 	}
 
+	var hdr header
+
+	setDefaultFail := func() {
+		// No tag processing should be done
+		p.skipTag = true
+		// Reset cursor for content read
+		p.cursor = tcursor
+	}
+
 	tcursor = p.cursor
 	var skipMessageParse bool
-	hdr, err := p.parseHeader()
-	if errors.Is(err, syslogparser.ErrSonicOSFormat) {
+	hdr, err = p.parseHeader()
+	if err == nil {
+		p.cursor++
+	} else if errors.Is(err, syslogparser.ErrSonicOSFormat) {
 		skipMessageParse = true
 
 		hdr, err = p.parseSonicWallHeader()
 		if err != nil {
+			setDefaultFail()
 			return err
 		}
 	} else if errors.Is(err, syslogparser.ErrFortiOSFormat) {
@@ -203,6 +216,7 @@ func (p *Parser) Parse() error {
 
 		hdr, err = p.parseFortiOSHeader()
 		if err != nil {
+			setDefaultFail()
 			return err
 		}
 	} else if errors.Is(err, syslogparser.ErrCiscoASAFormat) {
@@ -210,27 +224,19 @@ func (p *Parser) Parse() error {
 
 		hdr, err = p.parseCiscoASAHeader()
 		if err != nil {
+			setDefaultFail()
 			return err
 		}
-	} else if strings.Contains(fmt.Sprintf("%s", err), syslogparser.ErrTimestampUnknownFormat.ErrorString) {
-		// RFC3164 sec 4.3.2.
-		hdr.timestamp = time.Now().Round(time.Second)
-		// No tag processing should be done
-		p.skipTag = true
-		// Reset cursor for content read
-		p.cursor = tcursor
+	} else {
+		setDefaultFail()
 
 		//we should error for this
 		return err
-	} else if err != nil {
-		return err
-	} else {
-		p.cursor++
 	}
 
 	if !skipMessageParse {
 		msg, err := p.parsemessage()
-		if err != syslogparser.ErrEOL {
+		if !errors.Is(err, syslogparser.ErrEOL) {
 			return err
 		}
 		p.message = msg
