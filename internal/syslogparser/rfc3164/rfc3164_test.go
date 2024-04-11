@@ -1,6 +1,7 @@
 package rfc3164
 
 import (
+	"log"
 	"testing"
 	"time"
 
@@ -22,8 +23,8 @@ var (
 	lastTriedTimestampLen = 15
 )
 
-func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid(c *C) {
-	buff := []byte(`<34>:Apr 04 19:28:04 UTC: %ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`)
+func (s *Rfc3164TestSuite) TestParserCiscoASA_NoTimestamp(c *C) {
+	buff := []byte(`<34>:%ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`)
 
 	p := NewParser(buff)
 	expectedP := &Parser{
@@ -39,11 +40,45 @@ func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid(c *C) {
 	c.Assert(err, IsNil)
 
 	obtained := p.Dump()
+	now := time.Now()
+	log.Println(obtained)
+	obtained["timestamp"] = now
 	expected := syslogparser.LogParts{
-		"timestamp": time.Date(2024, time.April, 04, 19, 28, 04, 0, time.UTC),
+		"timestamp": now,
 		"hostname":  "",
 		"tag":       "",
-		"content":   `<34>:Apr 04 19:28:04 UTC: %ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`,
+		"content":   `<34>:%ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`,
+		"priority":  34,
+		"facility":  4,
+		"severity":  2,
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
+func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid(c *C) {
+	buff := []byte(`<34>:Apr 04 19:28:05 EDT: %ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:     buff,
+		cursor:   0,
+		l:        len(buff),
+		location: time.UTC,
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+
+	expected := syslogparser.LogParts{
+		"timestamp": time.Date(2024, time.April, 04, 19, 28, 05, 0, time.UTC),
+		"hostname":  "",
+		"tag":       "",
+		"content":   `<34>:Apr 04 19:28:05 EDT: %ASA-session-6-106100: access-list outside_access_in permitted tcp outside/155.138.247.97(58344) -> NEX-DMZ/10.90.3.239(443) hit-cnt 1 first hit [0x8fca8d4d, 0xf3808cf3]`,
 		"priority":  34,
 		"facility":  4,
 		"severity":  2,

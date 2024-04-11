@@ -284,6 +284,15 @@ func (s *Server) parser(line []byte, client string, tlsPeer string) {
 	}
 
 	logParts := parser.Dump()
+
+	timestamp, ok := logParts["timestamp"]
+	if !ok {
+		logParts["timestamp"] = time.Now().UTC().Format(time.RFC3339)
+	}
+	if timestamp == "" {
+		timestamp = time.Now().UTC().Format(time.RFC3339)
+	}
+
 	logParts["client"] = client
 	if logParts["hostname"] == "" && (s.format == RFC3164 || s.format == Automatic) {
 		if i := strings.Index(client, ":"); i > 1 {

@@ -17,6 +17,40 @@ type Rfc5424TestSuite struct {
 
 var _ = Suite(&Rfc5424TestSuite{})
 
+func (s *Rfc5424TestSuite) TestParserCiscoASA_Valid_RFC5424(c *C) {
+	buff := []byte(`<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:   buff,
+		cursor: 0,
+		l:      len(buff),
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+
+	expected := syslogparser.LogParts{
+		"priority":        166,
+		"facility":        20,
+		"severity":        6,
+		"version":         1,
+		"timestamp":       time.Date(2018, time.June, 27, 12, 17, 46, 0, time.UTC),
+		"hostname":        "",
+		"app_name":        "",
+		"proc_id":         "",
+		"msg_id":          "",
+		"structured_data": "",
+		"message":         "<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port",
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
 func (s *Rfc5424TestSuite) TestParser_Valid(c *C) {
 	fixtures := []string{
 		// no STRUCTURED-DATA

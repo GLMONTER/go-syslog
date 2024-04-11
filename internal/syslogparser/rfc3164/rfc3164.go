@@ -48,7 +48,7 @@ func (p *Parser) Location(location *time.Location) {
 	p.location = location
 }
 
-const CiscoASATimestampRePattern = `^<\d+>:(\w{3} \d{2} \d{2}:\d{2}:\d{2}(?: [A-Z]+)?)`
+const CiscoASATimestampRePattern = `^<\d+>:(?:(\w{3} \d{2} \d{2}:\d{2}:\d{2}(?: [A-Z]+)?) )?`
 
 var ciscoASATimestampCaptureRe = regexp.MustCompile(CiscoASATimestampRePattern)
 
@@ -60,6 +60,13 @@ func (p *Parser) parseCiscoASAHeader() (header, error) {
 	var timestamp string
 	if match != nil && len(match) > 1 {
 		timestamp = match[1]
+	}
+
+	if timestamp == "" {
+		return header{
+			timestamp: time.Now().UTC(),
+			hostname:  "",
+		}, nil
 	}
 
 	potentialLayouts := []string{
@@ -165,6 +172,8 @@ func (p *Parser) parseFortiOSHeader() (header, error) {
 
 func (p *Parser) Parse() error {
 	tcursor := p.cursor
+	p.message = rfc3164message{content: string(p.buff)}
+
 	pri, err := p.parsePriority()
 	if err != nil {
 		p.message = rfc3164message{content: string(p.buff)}
