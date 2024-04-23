@@ -23,7 +23,38 @@ var (
 	lastTriedTimestampLen = 15
 )
 
-func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid_RFC5424(c *C) {
+func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid_RFC5424_DOT(c *C) {
+	buff := []byte(`<166>2024-03-11T19:46:23.423Z localhost.com snmpd[2100366]: LLDP_ProcessPort: Failed to get status of port -2080374777: Bad parameter`)
+
+	p := NewParser(buff)
+	expectedP := &Parser{
+		buff:     buff,
+		cursor:   0,
+		l:        len(buff),
+		location: time.UTC,
+	}
+
+	c.Assert(p, DeepEquals, expectedP)
+
+	err := p.Parse()
+	c.Assert(err, IsNil)
+
+	obtained := p.Dump()
+
+	expected := syslogparser.LogParts{
+		"timestamp": time.Date(2024, time.March, 11, 19, 46, 23, 423000000, time.UTC),
+		"hostname":  "",
+		"tag":       "",
+		"content":   `<166>2024-03-11T19:46:23.423Z localhost.com snmpd[2100366]: LLDP_ProcessPort: Failed to get status of port -2080374777: Bad parameter`,
+		"priority":  166,
+		"facility":  20,
+		"severity":  6,
+	}
+
+	c.Assert(obtained, DeepEquals, expected)
+}
+
+func (s *Rfc3164TestSuite) TestParserCiscoASA_Valid_RFC54242(c *C) {
 	buff := []byte(`<166>2018-06-27T12:17:46Z asa : %ASA-6-110002: Failed to locate egress interface for protocol from src interface :src IP/src port to dest IP/dest port`)
 
 	p := NewParser(buff)

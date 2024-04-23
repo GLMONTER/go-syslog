@@ -144,7 +144,7 @@ const FortiOSTimestampRePattern = `eventtime=(\d+)`
 
 var fortiOSTimestampCaptureRe = regexp.MustCompile(FortiOSTimestampRePattern)
 
-const ciscoASATimestampCapture = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
+const ciscoASATimestampCapture = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)`
 
 var ciscoASATimestampRegexp = regexp.MustCompile(ciscoASATimestampCapture)
 
@@ -179,10 +179,20 @@ func (p *Parser) parseCiscoASA_RFC5424() (header, error) {
 	match := ciscoASATimestampRegexp.FindStringSubmatch(string(p.buff))
 	if match != nil && len(match) > 1 {
 		timestampStr := match[1]
-		parsedTime, err := time.Parse(time.RFC3339, timestampStr)
-		if err != nil {
-			return header{}, fmt.Errorf("failed to parse cisco ASA RFC5424 timestamp: %v", err)
+		var parsedTime time.Time
+		var err error
+		if strings.Contains(timestampStr, ".") {
+			parsedTime, err = time.Parse(time.RFC3339Nano, timestampStr)
+			if err != nil {
+				return header{}, fmt.Errorf("failed to parse cisco ASA RFC5424 dot timestamp: %v", err)
+			}
+		} else {
+			parsedTime, err = time.Parse(time.RFC3339, timestampStr)
+			if err != nil {
+				return header{}, fmt.Errorf("failed to parse cisco ASA RFC5424 timestamp: %v", err)
+			}
 		}
+
 		fixTimestampIfNeeded(&parsedTime)
 		return header{timestamp: parsedTime, hostname: ""}, nil
 	}
@@ -338,7 +348,7 @@ func (p *Parser) parsemessage() (rfc3164message, error) {
 	return msg, err
 }
 
-const ciscoASA_RFC5424Format = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)`
+const ciscoASA_RFC5424Format = `^<\d+>(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)`
 
 var ciscoASA_RFC5424Regexp = regexp.MustCompile(ciscoASA_RFC5424Format)
 
