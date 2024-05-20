@@ -40,7 +40,7 @@ func NewParser(buff []byte) *Parser {
 		buff:     buff,
 		cursor:   0,
 		l:        len(buff),
-		location: time.UTC,
+		location: time.Local,
 	}
 }
 
