@@ -21,7 +21,7 @@ var (
 
 const (
 	datagramChannelBufferSize = 10
-	datagramReadBufferSize    = 64 * 1024
+	datagramReadBufferSize    = 900 * 1024
 )
 
 // A function type which gets the TLS peer name from the connection. Can return
@@ -47,7 +47,7 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{tlsPeerNameFunc: defaultTlsPeerName, datagramPool: sync.Pool{
 		New: func() interface{} {
-			return make([]byte, 65536)
+			return make([]byte, datagramReadBufferSize)
 		},
 	},
 
