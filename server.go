@@ -208,6 +208,10 @@ func (s *Server) goAcceptConnection(listener net.Listener) {
 
 func (s *Server) goScanConnection(connection net.Conn) {
 	scanner := bufio.NewScanner(connection)
+
+	buf := make([]byte, datagramReadBufferSize)
+	scanner.Buffer(buf, datagramReadBufferSize)
+
 	if sf := s.format.GetSplitFunc(); sf != nil {
 		scanner.Split(sf)
 	}
